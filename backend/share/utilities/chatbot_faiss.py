@@ -11,7 +11,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 
-from settings.configs import OPENAI_API_KEY, MODEL_ID
+from settings.configs import OPENAI_API_KEY, MODEL_ID, PERSIST_DIRECTORY, PDF_PATH
 
 from utilities.log_controler import LogControler
 
@@ -19,14 +19,19 @@ from utilities.log_controler import LogControler
 log_controler = LogControler()
 
 class ChatbotFAISS:
-    def __init__(self, persist_directory: str = "data/faiss_index", pdf_path: str = "data/ap-sd-report-2022-th.pdf"):
-        self.persist_directory = persist_directory
-        self.pdf_path = pdf_path
+    def __init__(self):
+        self.persist_directory = PERSIST_DIRECTORY
+        self.pdf_path = PDF_PATH
+        self.OPENAI_API_KEY = OPENAI_API_KEY
+        self.MODEL_ID = MODEL_ID
+        # Check if the required environment variables are set
+        if not self.persist_directory or not self.pdf_path or not self.OPENAI_API_KEY or not self.MODEL_ID:
+            log_controler.log_error("Required environment variables are not set.", "ChatbotFAISS __init__")
+            raise ValueError("Required environment variables are not set.")
+
         self.embeddings = None
         self.vector_store = None
         self.qa_chain = None
-        self.OPENAI_API_KEY = OPENAI_API_KEY
-        self.MODEL_ID = MODEL_ID
         self.total_steps = 7
 
         try:

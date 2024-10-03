@@ -38,3 +38,5 @@ REDIS_PASSWORD = os.environ["REDIS_PASSWORD"]
 #### OpenAI ####
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 MODEL_ID = os.environ["MODEL_ID"]
+PERSIST_DIRECTORY = os.environ["PERSIST_DIRECTORY"]
+PDF_PATH = os.environ["PDF_PATH"]
