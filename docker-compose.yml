@@ -1,0 +1,65 @@
+services:
+
+  ##########################################################################################
+  ### FastAPI
+  ##########################################################################################
+
+  fastapi-oauth2:
+    build:
+      context: ./backend
+      dockerfile: fastapi-oauth2/Dockerfile
+    ports:
+      - '${PORT_FASTAPI_OAUTH2}:${PORT_FASTAPI_OAUTH2}'
+    volumes:
+      - ./backend/fastapi-oauth2/logs:/app/fastapi-oauth2/logs/
+    env_file:
+      - ./.env
+    networks:
+      - web
+    labels:      
+      - traefik.enable=true      
+      - traefik.http.routers.fastapi-oauth2.rule=Host(`${HOST}`) && PathPrefix(`${API_PATH_FASTAPI_OAUTH2}`)      
+      - traefik.http.routers.fastapi-oauth2.entrypoints=web
+    command: uvicorn main:app --host 0.0.0.0 --port $PORT_FASTAPI_OAUTH2
+  fastapi-ai-chat:
+    build:
+      context: ./backend
+      dockerfile: fastapi-ai-chat/Dockerfile
+    ports:
+      - '${PORT_FASTAPI_AI_CHAT}:${PORT_FASTAPI_AI_CHAT}'
+    volumes:
+      - ./backend/fastapi-ai-chat/logs:/app/fastapi-ai-chat/logs/
+    env_file:
+      - ./.env
+    networks:
+      - web
+    labels:      
+      - traefik.enable=true      
+      - traefik.http.routers.fastapi-ai-chat.rule=Host(`${HOST}`) && PathPrefix(`${API_PATH_FASTAPI_AI_CHAT}`)      
+      - traefik.http.routers.fastapi-ai-chat.entrypoints=web
+    command: uvicorn main:app --host 0.0.0.0 --port $PORT_FASTAPI_AI_CHAT
+
+
+  ##########################################################################################
+  ### Redis 7.2-alpine db 0
+  ########################################################################################## 
+
+  redis-queue:
+    image: redis:7.2-alpine
+    ports:
+      - '${PORT_REDIS}:${PORT_REDIS}'
+    volumes:
+      - redis_queue_data:/data
+    networks:
+      - web
+    command: redis-server --requirepass $REDIS_PASSWORD --appendonly yes
+
+networks:
+  web:
+    # external: true # Use On Production Only
+    driver: bridge
+
+volumes:
+  sqlserver_data:
+    driver: local
+  redis_queue_data:

@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Share directory
+core/*
+settings/*
+utilities/*
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+cert
+reverse-proxy/certificates
+app/resource/*
+
+# Unit test / coverage reports
+logs/*
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+test.py
+test_format_full.py
+test_create.py
+test_update.py
+test_delete.py
+test_attachment.py

@@ -1,0 +1,10 @@
+
+# Environment
+.env
+/venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class# LOG & CACHE
+*__pycache__/
