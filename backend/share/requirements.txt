@@ -14,7 +14,7 @@ python-dotenv==1.0.0
 loguru==0.7.2
 
 # Pydantic - a data validation and settings management using Python type annotations.
-pydantic==2.5.3
+pydantic>=2.7.4,<3.0.0
 
 # python-jose - a JavaScript Object Signing and Encryption (JOSE) implementation in Python.
 python-jose[cryptography]==3.3.0
@@ -30,3 +30,16 @@ requests==2.31.0
 
 # python-multipart - a Python module for parsing multipart/form-data.
 python-multipart==0.0.9
+
+# OpenAI - OpenAI API client.
+openai==1.51.0
+
+# LangChain and related libraries
+langchain_openai==0.2.1
+langchain_community==0.3.1
+
+# FAISS - Facebook AI Similarity Search (Ensure you have FAISS installed appropriately)
+faiss-cpu==1.8.0.post1
+
+# pypdf - a Python library to read and write PDF files.
+pypdf==5.0.1

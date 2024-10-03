@@ -34,3 +34,7 @@ SECRET_KEY = os.environ["SECRET_KEY"] + "="
 HOST_REDIS = os.environ["HOST_REDIS"]
 PORT_REDIS = os.environ["PORT_REDIS"]
 REDIS_PASSWORD = os.environ["REDIS_PASSWORD"]
+
+#### OpenAI ####
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+MODEL_ID = os.environ["MODEL_ID"]

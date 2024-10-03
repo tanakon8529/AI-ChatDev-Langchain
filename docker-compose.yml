@@ -29,6 +29,7 @@ services:
       - '${PORT_FASTAPI_AI_CHAT}:${PORT_FASTAPI_AI_CHAT}'
     volumes:
       - ./backend/fastapi-ai-chat/logs:/app/fastapi-ai-chat/logs/
+      - ./backend/fastapi-ai-chat/data:/app/fastapi-ai-chat/data/
     env_file:
       - ./.env
     networks:

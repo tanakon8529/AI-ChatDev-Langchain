@@ -48,3 +48,7 @@ class LogControler:
     def log_error(self, error: str, message: str):
         path_file, function_name = self.get_caller_info()
         logger.bind(path_file=path_file, function_name=function_name, error=error).error(message)
+
+    def log_info(self, message: str):
+        path_file, function_name = self.get_caller_info()
+        logger.bind(path_file=path_file, function_name=function_name, error="None").info(message)
