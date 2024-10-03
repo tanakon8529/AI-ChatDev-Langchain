@@ -164,7 +164,7 @@ class ChatbotFAISS:
             response = self.qa_chain.invoke(user_query)
             log_controler.log_info(f"User Query: {user_query} | Response: {response}")
             return response
-        except openai.InvalidRequestError as e:
+        except openai.APIResponseValidationError as e:
             log_controler.log_error(f"OpenAI API Error: {e}", "process_query")
             return {"error_code": "01", "msg": f"OpenAI API Error: {e}"}
         except Exception as e:
