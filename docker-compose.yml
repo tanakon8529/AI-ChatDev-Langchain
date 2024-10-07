@@ -21,6 +21,7 @@ services:
       - traefik.http.routers.fastapi-oauth2.rule=Host(`${HOST}`) && PathPrefix(`${API_PATH_FASTAPI_OAUTH2}`)      
       - traefik.http.routers.fastapi-oauth2.entrypoints=web
     command: uvicorn main:app --host 0.0.0.0 --port $PORT_FASTAPI_OAUTH2
+
   fastapi-ai-chat:
     build:
       context: ./backend
@@ -29,7 +30,8 @@ services:
       - '${PORT_FASTAPI_AI_CHAT}:${PORT_FASTAPI_AI_CHAT}'
     volumes:
       - ./backend/fastapi-ai-chat/logs:/app/fastapi-ai-chat/logs/
-      - ./backend/fastapi-ai-chat/data:/app/fastapi-ai-chat/data/
+      - ./backend/share/data:/app/data                # **Map the host's data directory to /app/data**
+      - ./backend/fastapi-ai-chat/data:/data         # Persist FAISS index
     env_file:
       - ./.env
     networks:
@@ -39,7 +41,6 @@ services:
       - traefik.http.routers.fastapi-ai-chat.rule=Host(`${HOST}`) && PathPrefix(`${API_PATH_FASTAPI_AI_CHAT}`)      
       - traefik.http.routers.fastapi-ai-chat.entrypoints=web
     command: uvicorn main:app --host 0.0.0.0 --port $PORT_FASTAPI_AI_CHAT
-
 
   ##########################################################################################
   ### Redis 7.2-alpine db 0

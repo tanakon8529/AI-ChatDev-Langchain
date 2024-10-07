@@ -108,8 +108,10 @@ class ChatbotFAISS:
         description = "Creating or loading FAISS vector store"
         start_time = time.time()
 
+        index_file = os.path.join(self.persist_directory, "index.faiss")
+
         try:
-            if os.path.exists(self.persist_directory):
+            if os.path.exists(index_file):
                 log_controler.log_info("Loading existing FAISS vector store.")
                 vector_store = FAISS.load_local(self.persist_directory, self.embeddings, allow_dangerous_deserialization=True)
                 log_controler.log_info("Loaded existing FAISS vector store.")
@@ -118,7 +120,7 @@ class ChatbotFAISS:
                 document_chunks = self.load_and_split_pdf()
                 vector_store = FAISS.from_documents(document_chunks, self.embeddings)
                 vector_store.save_local(self.persist_directory)
-                log_controler.log_info("Created new FAISS vector store.")
+                log_controler.log_info(f"Created new FAISS vector store | Persisted at: {self.persist_directory}")
             return vector_store
         except Exception as e:
             log_controler.log_error(f"Error initializing FAISS vector store: {e}", "initialize_vector_store")

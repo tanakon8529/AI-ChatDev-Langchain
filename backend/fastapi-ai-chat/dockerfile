@@ -24,5 +24,5 @@ COPY ../share/core/ ./core/
 COPY ../share/utilities/ ./utilities/
 COPY ../share/middlewares/ ./middlewares/
 
-# Copy project
-COPY ./fastapi-ai-chat .
+# Copy project-specific code
+COPY ./fastapi-ai-chat ./
