@@ -186,14 +186,6 @@ class ChatbotFAISS:
             self.log_time(topic, description, start_time, end_time)
         return qa_chain
 
-    def cosine_similarity(self, vec1, vec2):
-        """Calculate cosine similarity between two vectors."""
-        vec1 = np.array(vec1)
-        vec2 = np.array(vec2)
-        if np.linalg.norm(vec1) == 0 or np.linalg.norm(vec2) == 0:
-            return 0.0
-        return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-
     def check_cache(self, question: str):
         try:
             if self.cache_index.ntotal == 0:
