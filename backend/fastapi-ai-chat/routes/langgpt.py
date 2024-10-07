@@ -16,4 +16,4 @@ async def ask_ai_langchain_gpt(
     data: Optional[DynamicBaseModel] = None,
     _: str = Depends(valid_access_token),
 ):
-    return ai_langchain_gpt_ask(data)
+    return await ai_langchain_gpt_ask(data)

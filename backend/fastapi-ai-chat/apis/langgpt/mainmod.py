@@ -7,13 +7,13 @@ log_controler = LogControler()
 
 from apis.langgpt.submod import ask_langchan_model_gpt
 
-def ai_langchain_gpt_ask(data):
+async def ai_langchain_gpt_ask(data):
     result = None
     try:
         if data is None:
             raise HTTPException(status_code=400, detail='data is required.')
         
-        result = ask_langchan_model_gpt(data)
+        result = await ask_langchan_model_gpt(data)
         if "error_server" in result or "error_code" in result:
             raise HTTPException(status_code=400, detail='{}'.format(result.get('msg')))
         if isinstance(result, Exception):

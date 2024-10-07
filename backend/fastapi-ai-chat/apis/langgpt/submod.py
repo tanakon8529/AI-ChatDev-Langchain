@@ -5,7 +5,7 @@ from utilities.log_controler import LogControler
 log_controler = LogControler()
 chat_bot = ChatbotFAISS()
 
-def ask_langchan_model_gpt(data):
+async def ask_langchan_model_gpt(data):
     # data is DynamicBaseModel by Pydantic
     # convert data to dict
     data_dict = data.dict()
@@ -13,7 +13,7 @@ def ask_langchan_model_gpt(data):
     if question is None:
         return {"error_code": "01", "msg": "Question is required."}
 
-    answer_response = chat_bot.process_query(question)
+    answer_response = await chat_bot.process_query(question)
     if "error_code" in answer_response:
         return answer_response
 
