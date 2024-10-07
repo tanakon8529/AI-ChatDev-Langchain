@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from utilities.chatbot_faiss import ChatbotFAISS
@@ -13,13 +12,16 @@ def ask_langchan_model_gpt(data):
     question = data_dict.get('question')
     if question is None:
         return {"error_code": "01", "msg": "Question is required."}
-    
-    answer = chat_bot.process_query(question)
-    if "error_code" in answer:
-        return answer
-    
+
+    answer_response = chat_bot.process_query(question)
+    if "error_code" in answer_response:
+        return answer_response
+
     result = {
         "msg": "success",
-        "data": answer
+        "data": {
+            "answer": answer_response.get("answer"),
+            "type_res": answer_response.get("type_res")
+        }
     }
     return result

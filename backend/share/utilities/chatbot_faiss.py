@@ -3,6 +3,9 @@
 import os
 import time
 import openai
+import json
+import uuid
+import numpy as np
 
 from langchain_openai import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
@@ -13,6 +16,7 @@ from langchain.chains import RetrievalQA
 
 from settings.configs import OPENAI_API_KEY, MODEL_ID, PERSIST_DIRECTORY, PDF_PATH
 
+from utilities.redis_connector import get_client
 from utilities.log_controler import LogControler
 
 # Initialize the LogControler
@@ -32,15 +36,19 @@ class ChatbotFAISS:
         self.embeddings = None
         self.vector_store = None
         self.qa_chain = None
-        self.total_steps = 7
+        self.total_steps = 8  # Updated to include caching steps
 
         try:
+            # Initialize Redis client
+            self.redis_client = get_client()
             # Initialize embeddings
             self.embeddings = self.initialize_embeddings(self.OPENAI_API_KEY)
             # Initialize vector store
             self.vector_store = self.initialize_vector_store()
             # Initialize QA chain
             self.qa_chain = self.initialize_qa_chain()
+            # Initialize cache
+            self.cache_prefix = "chatbot_cache:"
         except Exception as e:
             log_controler.log_error(f"Initialization failed: {e}", "ChatbotFAISS __init__")
             raise  # Re-raise the exception to prevent running with incomplete initialization
@@ -156,16 +164,124 @@ class ChatbotFAISS:
             self.log_step(topic, step_num, description, start_time, end_time)
         return qa_chain
 
-    def process_query(self, user_query: str) -> str:
+    def cosine_similarity(self, vec1, vec2):
+        """Calculate cosine similarity between two vectors."""
+        vec1 = np.array(vec1)
+        vec2 = np.array(vec2)
+        if np.linalg.norm(vec1) == 0 or np.linalg.norm(vec2) == 0:
+            return 0.0
+        return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+
+    def check_cache(self, question: str):
+        """Check if a similar question exists in the cache."""
+        try:
+            # Compute embedding for the new question
+            query_embedding = self.embeddings.embed_query(question)
+
+            # Check if embedding is a NumPy array, then convert to list
+            if isinstance(query_embedding, np.ndarray):
+                query_embedding = query_embedding.tolist()
+            elif not isinstance(query_embedding, list):
+                raise TypeError(f"Unsupported embedding type: {type(query_embedding)}")
+
+            # Serialize the query embedding for consistency
+            # (Not strictly necessary here, but good practice)
+
+            # Retrieve all cached keys
+            cache_keys = self.redis_client.keys(f"{self.cache_prefix}*")
+            for key in cache_keys:
+                cache_data = self.redis_client.hgetall(key)
+                if not cache_data:
+                    continue  # Skip if no data found
+
+                cached_question = cache_data.get('question')
+                cached_answer = cache_data.get('answer')
+                cached_embedding = cache_data.get('embedding')
+
+                if not all([cached_question, cached_answer, cached_embedding]):
+                    continue  # Skip incomplete cache entries
+
+                # Deserialize the embedding
+                cached_embedding = json.loads(cached_embedding)
+
+                similarity = self.cosine_similarity(query_embedding, cached_embedding)
+                if similarity >= 0.8:
+                    return cached_answer, "cache"
+            return None, None
+        except Exception as e:
+            log_controler.log_error(f"Error checking cache: {e}", "check_cache")
+            return None, None
+        
+    def add_to_cache(self, question: str, answer: str):
+        """Add a new question-answer pair to the cache with embedding."""
+        try:
+            # Compute embedding
+            embedding = self.embeddings.embed_query(question)
+            
+            # Check if embedding is a NumPy array, then convert to list
+            if isinstance(embedding, np.ndarray):
+                embedding = embedding.tolist()
+            elif not isinstance(embedding, list):
+                # If embedding is neither a NumPy array nor a list, raise an error
+                raise TypeError(f"Unsupported embedding type: {type(embedding)}")
+
+            # Generate a unique cache key
+            cache_id = str(uuid.uuid4())
+            cache_key = f"{self.cache_prefix}{cache_id}"
+
+            # Serialize the embedding
+            embedding_json = json.dumps(embedding)
+
+            # Store in Redis as a hash
+            self.redis_client.hset(cache_key, mapping={
+                "question": question,
+                "answer": answer,
+                "embedding": embedding_json
+            })
+
+            # Set expiration to 1 day (86400 seconds)
+            self.redis_client.expire(cache_key, 86400)
+            log_controler.log_info(f"Added question to cache with key: {cache_key}")
+        except Exception as e:
+            log_controler.log_error(f"Error adding to cache: {e}", "add_to_cache")
+
+    def process_query(self, user_query: str) -> dict:
         topic = "User Query Processing"
         step_num = 7
         description = f"Processing user query: {user_query}"
         start_time = time.time()
 
         try:
-            response = self.qa_chain.invoke(user_query)
-            log_controler.log_info(f"User Query: {user_query} | Response: {response}")
+            # Check cache first
+            cached_answer, cache_status = self.check_cache(user_query)
+            if cached_answer:
+                log_controler.log_info(f"Cache hit for query: {user_query}")
+                response = {
+                    "answer": cached_answer,
+                    "type_res": "cache"
+                }
+                return response
+
+            # If not in cache, generate a new answer
+            response_text = self.qa_chain.invoke(user_query)
+            # Ensure response_text is a string
+            if isinstance(response_text, dict):
+                # Adjust based on the actual structure
+                response_text = response_text.get("result", "")
+                if not isinstance(response_text, str):
+                    log_controler.log_error(f"Unexpected response format: {response_text}", "process_query")
+                    return {"error_code": "03", "msg": "Unexpected response format from QA chain."}
+
+            response = {
+                "answer": response_text,
+                "type_res": "generate"
+            }
+
+            # Add the new Q&A to cache
+            self.add_to_cache(user_query, response_text)
+
             return response
+
         except openai.APIResponseValidationError as e:
             log_controler.log_error(f"OpenAI API Error: {e}", "process_query")
             return {"error_code": "01", "msg": f"OpenAI API Error: {e}"}
