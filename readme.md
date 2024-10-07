@@ -1,3 +1,4 @@
+
 # AI ChatDev Langchain
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -17,12 +18,8 @@
 - [Running the Application](#running-the-application)
 - [API Endpoints](#api-endpoints)
 - [Project Structure](#project-structure)
-- [Testing](#testing)
 - [Logging](#logging)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
 - [License](#license)
-- [Contact](#contact)
 
 ## Features
 
@@ -141,7 +138,11 @@
 
     ```json
     {
-      "response": "The total number of employees in 2022 is 1,234."
+        "msg": "success",
+        "data": {
+            "query": "ในปี 2565 บริษัท เอพี (ไทยแลนด์) และบริษัทในเครือมีจำนวนพนักงานรวมกี่คน?, จำนวนพนักงานสายงานผู้บริหารในปี 2565 เป็นเท่าไร?, พนักงานชั่วคราวในปี 2565 มีจำนวนเท่าไร?",
+            "result": "ในปี 2565 บริษัท เอพี (ไทยแลนด์) และบริษัทในเครือมีจำนวนพนักงานรวม 2,808 คน, จำนวนพนักงานสายงานผู้บริหารในปี 2565 เป็น 18 คน, และพนักงานชั่วคราวในปี 2565 มีจำนวน 58 คน"
+        }
     }
     ```
 
@@ -218,78 +219,6 @@ AI-ChatDev-Langchain/
 - **venv/**: Python virtual environment (if used outside Docker).
 - **README.md**: Project documentation.
 
-## Testing
-
-The project utilizes `pytest` for testing. To run the tests:
-
-1. **Activate Virtual Environment**
-
-   If you're testing outside of Docker, ensure your virtual environment is activated:
-
-   ```bash
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. **Install Dependencies**
-
-   Ensure all dependencies are installed:
-
-   ```bash
-   pip install -r backend/share/requirements.txt
-   ```
-
-3. **Run Tests**
-
-   Navigate to the project root and execute:
-
-   ```bash
-   pytest
-   ```
-
-   **Sample Test Cases**:
-
-   - **Health Check**
-
-     ```python
-     def test_health_check():
-         response = client.get("/")
-         assert response.status_code == 200
-         assert response.json() == {"message": "Chatbot FAISS API is up and running."}
-     ```
-
-   - **Successful Query**
-
-     ```python
-     def test_query_success():
-         payload = {"question": "What is the total number of employees in 2022?"}
-         response = client.post("/query", json=payload)
-         assert response.status_code == 200
-         assert "response" in response.json()
-         assert isinstance(response.json()["response"], str)
-     ```
-
-   - **Missing Question**
-
-     ```python
-     def test_query_missing_question():
-         payload = {}
-         response = client.post("/query", json=payload)
-         assert response.status_code == 400
-         assert response.json()["detail"] == "Question is required."
-     ```
-
-   - **Chatbot Not Initialized**
-
-     ```python
-     def test_query_chatbot_not_initialized(monkeypatch):
-         # Simulate chatbot not initialized
-         monkeypatch.setattr("apis.langgpt.mainmod.chat_bot", None)
-         payload = {"question": "What is the total number of employees in 2022?"}
-         response = client.post("/query", json=payload)
-         assert response.status_code == 400
-         assert response.json()["detail"] == "Chatbot is not initialized."
-     ```
-
 ## Logging
 
 The application uses a custom `LogControler` for structured and comprehensive logging. Logs are stored within the respective service directories and can be accessed via Docker volumes.
@@ -309,75 +238,6 @@ The application uses a custom `LogControler` for structured and comprehensive lo
 Embeddings Initialization | Step 3/7: Initializing OpenAI embeddings | Time Used: 2.50 seconds
 ```
 
-## Troubleshooting
-
-### **1. Dependency Conflicts**
-
-If you encounter dependency conflicts during Docker build, ensure that your `requirements.txt` specifies compatible versions. Refer to the [Dependencies Management](#dependencies-management) section.
-
-### **2. FAISS Installation Issues**
-
-FAISS can be challenging to install on certain architectures. Ensure you're using the correct FAISS version compatible with your system.
-
-- **Alternative Installation via Conda**:
-
-  ```bash
-  conda install -c conda-forge faiss-cpu
-  ```
-
-### **3. Redis Authentication**
-
-Ensure that the Redis password in your `.env` file matches the one specified in the `docker-compose.yml`.
-
-### **4. Application Crashes on Startup**
-
-Check the Docker container logs for detailed error messages:
-
-```bash
-docker logs -f <container_id>
-```
-
-Common issues might include missing environment variables, incorrect file paths, or unmet dependencies.
-
-### **5. Docker Networking Issues**
-
-Ensure that all services are connected to the correct Docker network (`web` in this case). Verify network configurations in `docker-compose.yml`.
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. **Fork the Repository**
-
-2. **Create a Feature Branch**
-
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-
-3. **Commit Your Changes**
-
-   ```bash
-   git commit -m "Add your feature"
-   ```
-
-4. **Push to the Branch**
-
-   ```bash
-   git push origin feature/YourFeature
-   ```
-
-5. **Open a Pull Request**
-
-   Describe your changes and submit the pull request for review.
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
-## Contact
-
-For any inquiries or support, please contact:
-
-- **Email**: your.email@example.com
-- **GitHub**: [yourusername](https://github.com/yourusername)
