@@ -47,16 +47,3 @@ pypdf==5.0.1
 # numpy - a Python library for numerical computing.
 # langchain-community 0.3.1 requires numpy<2.0.0 and >=1.26.0
 numpy>=1.26.0,<2.0.0
-
-# langdetect - a language detection library for Python.
-langdetect==1.0.9
-
-# pythainlp - a Python library for Thai natural language processing.
-pythainlp==5.0.4
-
-# python-crfsuite - a Python binding to CRFsuite.
-# for nltk
-python-crfsuite==0.9.11
-
-# nltk - a Python library for natural language processing.
-nltk==3.9.1

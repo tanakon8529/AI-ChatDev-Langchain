@@ -1,11 +1,10 @@
-
 from __future__ import annotations
 
 from fastapi import HTTPException
 from utilities.log_controler import LogControler
 log_controler = LogControler()
 
-from apis.langgpt.submod import ask_langchan_model_gpt
+from apis.langgpt.submod import ask_langchain_model_gpt
 
 async def ai_langchain_gpt_ask(data):
     result = None
@@ -13,7 +12,7 @@ async def ai_langchain_gpt_ask(data):
         if data is None:
             raise HTTPException(status_code=400, detail='data is required.')
         
-        result = await ask_langchan_model_gpt(data)
+        result = await ask_langchain_model_gpt(data)
         if "error_server" in result or "error_code" in result:
             raise HTTPException(status_code=400, detail='{}'.format(result.get('msg')))
         if isinstance(result, Exception):

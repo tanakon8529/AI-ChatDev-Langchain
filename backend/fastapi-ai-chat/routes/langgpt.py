@@ -1,8 +1,7 @@
-
 from __future__ import annotations
 
+from fastapi import APIRouter, Depends
 from typing import Optional
-from fastapi import APIRouter, Depends, Header
 
 from core.auth import valid_access_token
 from core.models import DynamicBaseModel
