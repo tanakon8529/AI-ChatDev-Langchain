@@ -5,7 +5,14 @@ import time
 import asyncio
 import numpy as np
 import faiss
+import re
 
+from typing import List
+from langdetect import detect
+from pythainlp.tokenize import sent_tokenize as thai_sent_tokenize
+from nltk.tokenize import sent_tokenize as english_sent_tokenize
+
+from difflib import SequenceMatcher
 from langchain_openai import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import CharacterTextSplitter
@@ -13,28 +20,40 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain.schema import Document
+from langchain_community.docstore.in_memory import InMemoryDocstore
 
-from settings.configs import OPENAI_API_KEY, MODEL_ID, PERSIST_DIRECTORY, PDF_DIRECTORY_PATH, TEMPERATURE, BUILD_VECTOR_STORE
+from settings.configs import OPENAI_API_KEY, MODEL_ID, PERSIST_DIRECTORY, \
+                        PDF_DIRECTORY_PATH, TEMPERATURE, BUILD_VECTOR_STORE, \
+                        CLEAR_CACHE
 
 from utilities.log_controler import LogControler
 
 # Initialize the LogControler
 log_controler = LogControler()
 
+class NormalizedOpenAIEmbeddings(OpenAIEmbeddings):
+    def embed_query(self, text: str) -> List[float]:
+        embedding = super().embed_query(text)
+        embedding = np.array(embedding).astype('float32')
+        faiss.normalize_L2(embedding.reshape(1, -1))
+        return embedding.flatten().tolist()
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        embeddings = super().embed_documents(texts)
+        embeddings = np.array(embeddings).astype('float32')
+        faiss.normalize_L2(embeddings)
+        return embeddings.tolist()
+
 class ChatbotFAISS:
     """
         ChatbotFAISS processes user queries using FAISS for vector similarity search and caching.
         It handles both Thai and English languages by splitting inputs into individual questions
-        and processing them asynchronously. 
-        
-        For future high-demand scenarios, it's recommended
-        to move to a hybrid approach by integrating FAISS with scalable solutions like Redis
-        or specialized vector databases to enhance performance and scalability.
+        and processing them asynchronously.
     """
     def __init__(self):
         self.persist_directory = PERSIST_DIRECTORY
-        self.pdf_directory_path = PDF_DIRECTORY_PATH  # Updated to handle directory
+        self.pdf_directory_path = PDF_DIRECTORY_PATH
         self.OPENAI_API_KEY = OPENAI_API_KEY
         self.MODEL_ID = MODEL_ID
         self.TEMPERATURE = TEMPERATURE if TEMPERATURE else 0.3
@@ -46,12 +65,18 @@ class ChatbotFAISS:
             self.embeddings = self.initialize_embeddings()
             # Compute embedding dimension
             self.embedding_dimension = len(self.embeddings.embed_query("sample text"))
-            # Initialize FAISS cache index
-            self.cache_index = faiss.IndexFlatIP(self.embedding_dimension)
-            self.cached_answers = []
             # Initialize vector store and QA chain
             self.vector_store = self.initialize_vector_store()
             self.qa_chain = self.initialize_qa_chain()
+            # Initialize cache with normalized embeddings
+            index = faiss.IndexFlatIP(self.embedding_dimension)
+            self.cache_docstore = InMemoryDocstore({})
+            self.cache_vector_store = FAISS(
+                index=index,
+                docstore=self.cache_docstore,
+                index_to_docstore_id={},
+                embedding_function=self.embeddings
+            )
         except Exception as e:
             log_controler.log_error(f"Initialization failed: {e}", "ChatbotFAISS __init__")
             raise
@@ -59,6 +84,8 @@ class ChatbotFAISS:
         if BUILD_VECTOR_STORE == "True":
             self.clear_cache()
             self.rebuild_vector_store()
+        if CLEAR_CACHE == "True":
+            self.clear_cache()
 
     def log_time(self, topic, description, start_time, end_time):
         """Logs the time used for a particular operation."""
@@ -71,7 +98,7 @@ class ChatbotFAISS:
         description = "Initializing OpenAI embeddings"
         start_time = time.time()
 
-        embeddings = OpenAIEmbeddings(openai_api_key=self.OPENAI_API_KEY)
+        embeddings = NormalizedOpenAIEmbeddings(openai_api_key=self.OPENAI_API_KEY)
 
         end_time = time.time()
         self.log_time(topic, description, start_time, end_time)
@@ -206,23 +233,27 @@ class ChatbotFAISS:
             end_time = time.time()
             self.log_time(topic, description, start_time, end_time)
         return qa_chain
+    
+    def are_questions_similar(self, question1: str, question2: str) -> bool:
+        ratio = SequenceMatcher(None, question1.strip(), question2.strip()).ratio()
+        return ratio > 0.95  # Adjust the threshold as needed
 
     def check_cache(self, question: str):
         try:
-            if self.cache_index.ntotal == 0:
+            if not self.cache_vector_store.docstore._dict:
                 return None, None
 
-            embedding = self.embeddings.embed_query(question)
-            embedding = np.array(embedding).astype('float32')
-            # Normalize the embedding
-            faiss.normalize_L2(embedding.reshape(1, -1))
-            # Search in FAISS index
-            D, I = self.cache_index.search(embedding.reshape(1, -1), k=1)
-            similarity_score = D[0][0] if len(D[0]) > 0 else 0
-            log_controler.log_info(f"Similarity score for cache check: {similarity_score}")
-            if similarity_score >= 0.9:
-                cached_answer = self.cached_answers[I[0][0]]
-                return cached_answer, "cache"
+            # Perform similarity search in cache vector store
+            docs_and_scores = self.cache_vector_store.similarity_search_with_score(question, k=1)
+            if docs_and_scores:
+                doc, similarity = docs_and_scores[0]  # 'similarity' is the inner product (cosine similarity)
+                log_controler.log_info(f"Similarity score for cache check: {similarity}")
+                cached_question = doc.metadata.get('question', '')
+                cached_answer = doc.page_content
+                if similarity >= 0.9:
+                    # Compare the questions directly
+                    if self.are_questions_similar(question, cached_question):
+                        return cached_answer, "cache"
             return None, None
         except Exception as e:
             log_controler.log_error(f"Error checking cache: {e}", "check_cache")
@@ -230,22 +261,28 @@ class ChatbotFAISS:
 
     def add_to_cache(self, question: str, answer: str):
         try:
-            embedding = self.embeddings.embed_query(question)
-            embedding = np.array(embedding).astype('float32')
-            # Normalize the embedding
-            faiss.normalize_L2(embedding.reshape(1, -1))
-            # Add to FAISS index
-            self.cache_index.add(embedding.reshape(1, -1))
-            # Store the answer
-            self.cached_answers.append(answer)
-            log_controler.log_info("Added question to FAISS cache index.")
+            # Create a document with the question and answer as metadata
+            doc = Document(
+                page_content=answer,
+                metadata={'question': question}
+            )
+            # Add the document to the FAISS cache vector store
+            self.cache_vector_store.add_documents([doc])
+            log_controler.log_info("Added question and answer to FAISS cache index.")
         except Exception as e:
             log_controler.log_error(f"Error adding to cache: {e}", "add_to_cache")
 
     def clear_cache(self):
-        self.cache_index = faiss.IndexFlatIP(self.embedding_dimension)
-        self.cached_answers = []
-        log_controler.log_info("Cleared FAISS cache index and cached answers.")
+        # Reinitialize the FAISS index for caching
+        index = faiss.IndexFlatIP(self.embedding_dimension)
+        self.cache_docstore = InMemoryDocstore({})
+        self.cache_vector_store = FAISS(
+            index=index,
+            docstore=self.cache_docstore,
+            index_to_docstore_id={},
+            embedding_function=self.embeddings
+        )
+        log_controler.log_info("Cleared FAISS cache vector store.")
 
     def rebuild_vector_store(self):
         # Delete existing index file if exists
@@ -259,37 +296,27 @@ class ChatbotFAISS:
         log_controler.log_info("Rebuilt FAISS vector store.")
 
     def extract_questions(self, text):
-        prompt_template = """
-            You are an AI assistant that extracts individual questions from a user's input. The input may contain multiple questions in Thai or English, possibly in a single paragraph.
-
-            Please list each question separately.
-
-            Input:
-            {text}
-
-            Extracted Questions:
         """
+            Extracts questions from the input text.
+            Thai and English questions are supported.
+        """
+       # Split text into potential sentences using any delimiter (e.g., '?', '.', '!')
+        potential_sentences = re.split(r'(?<=[.?!])\s*', text)
+        sentences = []
 
-        PROMPT = PromptTemplate(
-            input_variables=["text"],
-            template=prompt_template
-        )
-
-        llm = ChatOpenAI(
-            openai_api_key=self.OPENAI_API_KEY,
-            model_name=self.MODEL_ID,
-            temperature=0  # Set temperature to 0 for deterministic output
-        )
-
-        chain = LLMChain(
-            llm=llm,
-            prompt=PROMPT
-        )
-
-        response = chain.run(text)
-        # Split the response into individual questions
-        questions = [q.strip() for q in response.strip().split('\n') if q.strip()]
-        return questions
+        for sentence in potential_sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            try:
+                language = detect(sentence)
+            except:
+                language = 'en'
+            if language == 'th':
+                sentences.extend(thai_sent_tokenize(sentence))
+            else:
+                sentences.extend(english_sent_tokenize(sentence))
+        return sentences
 
     async def process_query(self, user_query: str) -> dict:
         topic = "User Query Processing"
@@ -299,6 +326,17 @@ class ChatbotFAISS:
         try:
             # Use AI to extract questions
             questions = self.extract_questions(user_query)
+            if not questions:
+                # No questions extracted
+                log_controler.log_info("No questions found in the input.")
+                return {
+                    "msg": "No questions found in the input.",
+                    "data": {
+                        "answer": "",
+                        "type_res": "no_questions"
+                    }
+                }
+
             tasks = []
             responses = []
 
@@ -308,13 +346,22 @@ class ChatbotFAISS:
                     # Process each question asynchronously
                     tasks.append(self.process_single_question(question))
 
-            responses = await asyncio.gather(*tasks)
+            # Use asyncio.gather with return_exceptions=True
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Combine the answers
-            combined_answers = "\n".join([resp['answer'] for resp in responses if 'answer' in resp])
+            combined_answers = ""
+            type_res_list = []
+            for resp in responses:
+                if isinstance(resp, Exception):
+                    log_controler.log_error(f"Error processing question: {resp}", "process_query")
+                    combined_answers += "An error occurred while processing one of the questions.\n"
+                else:
+                    combined_answers += resp['answer'] + "\n"
+                    type_res_list.append(resp.get('type_res'))
 
             # Determine overall type_res
-            if all(resp.get('type_res') == 'cache' for resp in responses):
+            if all(tr == 'cache' for tr in type_res_list):
                 overall_type_res = 'cache'
             else:
                 overall_type_res = 'generate'
@@ -322,7 +369,7 @@ class ChatbotFAISS:
             response = {
                 "msg": "success",
                 "data": {
-                    "answer": combined_answers,
+                    "answer": combined_answers.strip(),
                     "type_res": overall_type_res
                 }
             }
@@ -350,20 +397,32 @@ class ChatbotFAISS:
         log_controler.log_info(f"Generating answer for query: {question}")
         response = self.qa_chain.invoke(question)
 
-        # Log the raw response and source documents
-        # log_controler.log_info(f"QA Chain response: {response['result']}")
-        # log_controler.log_info(f"Source Documents: {response.get('source_documents', [])}")
-
         # Ensure response is a string
         if not isinstance(response['result'], str):
             log_controler.log_error(f"Unexpected response format: {response}", "process_single_question")
             return {"error_code": "03", "msg": "Unexpected response format from QA chain."}
 
+        answer = response['result'].strip()
+
+        # Check if the answer is meaningful
+        if not answer or any(phrase in answer.lower() for phrase in [
+            "i'm sorry", "sorry", "ขออภัย", "ไม่มีข้อมูล", "ไม่พบข้อมูล", "i could not find", "no information",
+            "no data", "no results", "not found", "ไม่มีคำตอบ", "ไม่มีข้อมูลที่ต้องการ", "ไม่พบข้อมูลที่ต้องการ"
+            "no specific mention", "no specific information", "no specific data", "no specific results",
+            "I cannot find", "I cannot locate", "I cannot provide", "I cannot answer", "I cannot retrieve",
+            "I cannot", "I can't find", "I can't locate", "I can't provide", "I can't answer", "I can't retrieve",
+        ]):
+            log_controler.log_info(f"No valid answer generated for query: {question}")
+            return {
+                "answer": answer,
+                "type_res": "no_answer"
+            }
+
         # Add the new Q&A to cache
-        self.add_to_cache(question, response['result'])
+        self.add_to_cache(question, answer)
 
         return {
-            "answer": response['result'],
+            "answer": answer,
             "type_res": "generate"
         }
 
