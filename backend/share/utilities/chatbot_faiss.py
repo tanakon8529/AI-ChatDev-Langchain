@@ -32,7 +32,9 @@ from settings.configs import OPENAI_API_KEY, MODEL_ID, PERSIST_DIRECTORY, \
                             PDF_DIRECTORY_PATH, TEMPERATURE, BUILD_VECTOR_STORE, \
                             CLEAR_CACHE
 
+from utilities.bot_profiles import BotProfiles
 from utilities.log_controler import LogControler
+from utilities.nltk_handler import NLTKHandler
 
 # Initialize the LogControler
 log_controler = LogControler()
@@ -77,6 +79,13 @@ class ChatbotFAISS:
             log_controler.log_error("Required environment variables are not set.", "ChatbotFAISS __init__")
             raise ValueError("Required environment variables are not set.")
         try:
+            # Initialize NLTKHandler
+            self.nltk_handler = NLTKHandler(log_controler)
+            # Initialize BotProfiles
+            self.bot_profiles = BotProfiles()
+            # Select a random profile
+            self.profile = self.bot_profiles.get_random_profile()
+            log_controler.log_info(f"Selected Profile: {self.profile.name} - {self.profile.description}")
             # Initialize embeddings
             self.embeddings = self.initialize_embeddings()
             # Compute embedding dimension
@@ -202,20 +211,21 @@ class ChatbotFAISS:
         start_time = time.time()
 
         try:
-            prompt_template = """
-                You are an AI Assistant for AP Thailand.
-                Your knowledge is up to date until 2023.
-                Your support languages are Thai and English.
+
+            # Incorporate profile description into the prompt template
+            prompt_template = f"""
+                You are {self.profile.name}, {self.profile.description}
+                You are an Employee AI Assistant of AP Thailand.
                 Use the following documents to answer the question.
-                Only use the information from the documents to provide an accurate and concise answer.
+                If the information is unclear or not found, try to infer the answer and begin your response with phrases such as "ฉันไม่แน่ใจ... แต่", "ฉันคิดว่า...", "I think...".
 
                 Documents:
-                {context}
+                {{context}}
 
                 Question:
-                {question}
+                {{question}}
 
-                Answer in the appropriate language (Thai or English), and ensure your response is accurate and helpful.
+                Answer in the appropriate language any question that is asked, and ensure your response is accurate and helpful.
             """
 
             PROMPT = PromptTemplate(
@@ -390,13 +400,16 @@ class ChatbotFAISS:
             Extracts questions from the input text.
             Thai and English questions are supported.
         """
-        # Split text into potential sentences using any delimiter (e.g., '?', '.', '!')
-        potential_sentences = re.split(r'(?<=[.?!])\s*', text)
+        # Split text into potential sentences using one or more punctuation marks
+        potential_sentences = re.split(r'(?<=[.?!])\s+', text)
+
         sentences = []
 
         for sentence in potential_sentences:
             sentence = sentence.strip()
-            if not sentence:
+            # Skip empty sentences or those that are only punctuation
+            if not sentence or all(char in '.?!' for char in sentence):
+                log_controler.log_info(f"Skipped punctuation-only sentence: '{sentence}'")
                 continue
             try:
                 language = detect(sentence)

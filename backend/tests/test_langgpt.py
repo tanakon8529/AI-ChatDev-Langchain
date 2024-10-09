@@ -1,10 +1,6 @@
 from settings.configs import HOST, PORT_FASTAPI_AI_CHAT
 from utilitys.http_request import make_request, log_result
 
-import ssl
-print(ssl.OPENSSL_VERSION)
-
-
 # Assuming these are set up as environment variables or constants
 if HOST == "api.apthai.com":
     BASE_URL = f"http://localhost:{PORT_FASTAPI_AI_CHAT}/langgpt"
