@@ -320,15 +320,20 @@ class ChatbotFAISS:
 
     async def process_query(self, user_query: str) -> dict:
         topic = "User Query Processing"
-        description = f"Processing user query"
+        description = "Processing user query"
+        count = 1
+        total_steps = 3
+        step_count = f"Step {count}/{total_steps}"
         start_time = time.time()
 
         try:
-            # Use AI to extract questions
+            # Step 1: Extract Questions
+            log_controler.log_info(f"{topic} | {step_count} | Extracting questions.")
+            self.log_time(topic, description, start_time, time.time())
+
             questions = self.extract_questions(user_query)
             if not questions:
-                # No questions extracted
-                log_controler.log_info("No questions found in the input.")
+                log_controler.log_info(f"{topic} | {step_count} | No questions found in the input.")
                 return {
                     "msg": "No questions found in the input.",
                     "data": {
@@ -337,34 +342,35 @@ class ChatbotFAISS:
                     }
                 }
 
-            tasks = []
-            responses = []
+            # Step 2: Process Each Question Asynchronously
+            count += 1
+            step_count = f"Step {count}/{total_steps}"
+            log_controler.log_info(f"{topic} | {step_count} | Processing questions.")
 
-            for question in questions:
+            tasks = []
+            for idx, question in enumerate(questions, start=1):
                 question = question.strip()
                 if question:
-                    # Process each question asynchronously
+                    log_controler.log_info(f"{topic} | {step_count} | Processing question {idx}/{len(questions)}: {question}")
                     tasks.append(self.process_single_question(question))
 
-            # Use asyncio.gather with return_exceptions=True
             responses = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Combine the answers
+            # Step 3: Combine Answers
+            count += 1
+            step_count = f"Step {count}/{total_steps}"
             combined_answers = ""
             type_res_list = []
             for resp in responses:
                 if isinstance(resp, Exception):
-                    log_controler.log_error(f"Error processing question: {resp}", "process_query")
+                    log_controler.log_error(f"{topic} | {step_count} | Error processing question: {resp}", "process_query")
                     combined_answers += "An error occurred while processing one of the questions.\n"
                 else:
-                    combined_answers += resp['answer'] + "\n"
+                    combined_answers += resp.get('answer', '') + "\n"
                     type_res_list.append(resp.get('type_res'))
 
-            # Determine overall type_res
-            if all(tr == 'cache' for tr in type_res_list):
-                overall_type_res = 'cache'
-            else:
-                overall_type_res = 'generate'
+            # Determine Overall type_res
+            overall_type_res = 'cache' if all(tr == 'cache' for tr in type_res_list) else 'generate'
 
             response = {
                 "msg": "success",
@@ -374,27 +380,30 @@ class ChatbotFAISS:
                 }
             }
 
+            log_controler.log_info(f"{topic} | {step_count} | Combined Answers: {combined_answers.strip()}")
             return response
 
         except Exception as e:
-            log_controler.log_error(f"Error processing request: {str(e)}", "process_query")
+            log_controler.log_error(f"{topic} | {step_count} | Error processing request: {str(e)}", "process_query")
             return {"error_code": "02", "msg": f"Error processing request: {str(e)}"}
+
         finally:
-            end_time = time.time()
-            self.log_time(topic, description, start_time, end_time)
+            # Ensure that the final step is logged
+            if count < total_steps:
+                count = total_steps
+                step_count = f"Step {count}/{total_steps}"
+            self.log_time(f"{topic} | {step_count}", description, start_time, time.time())
 
     async def process_single_question(self, question: str) -> dict:
         # Check cache first
         cached_answer, cache_status = self.check_cache(question)
         if cached_answer:
-            log_controler.log_info(f"Cache hit for query: {question}")
             return {
                 "answer": cached_answer,
                 "type_res": "cache"
             }
 
         # If not in cache, generate a new answer
-        log_controler.log_info(f"Generating answer for query: {question}")
         response = self.qa_chain.invoke(question)
 
         # Ensure response is a string
@@ -413,6 +422,7 @@ class ChatbotFAISS:
             "I cannot", "I can't find", "I can't locate", "I can't provide", "I can't answer", "I can't retrieve",
         ]):
             log_controler.log_info(f"No valid answer generated for query: {question}")
+            log_controler.log_info(f"No valid answer generated: {answer}")
             return {
                 "answer": answer,
                 "type_res": "no_answer"
