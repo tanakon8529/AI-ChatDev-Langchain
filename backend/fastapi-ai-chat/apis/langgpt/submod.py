@@ -4,6 +4,7 @@ from typing import Dict, Any
 from fastapi import HTTPException
 
 from core.models import DynamicBaseModel
+from utilities.chatbot_faiss_test import ChatbotFAISSTest
 from utilities.chatbot_faiss import ChatbotFAISS
 from utilities.log_controler import LogControler
 
@@ -37,3 +38,15 @@ async def ask_langchain_model_gpt(data: DynamicBaseModel) -> Dict[str, Any]:
         }
     }
     return result
+
+async def test_chatbot_faiss() -> None:
+    try:
+        tester = ChatbotFAISSTest()
+        number_of_questions = 3 
+        # Topic of generated questions, e.g. "AP Thailand, บริษัท เอพี (ไทยแลนด์) จำกัด"
+        topic = "AP Thailand, บริษัท เอพี (ไทยแลนด์) จำกัด"
+        await tester.run_tests(number_of_questions, topic)
+        return True
+    except Exception as e:
+        return False
+

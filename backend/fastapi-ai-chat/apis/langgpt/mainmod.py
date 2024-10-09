@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from utilities.log_controler import LogControler
 log_controler = LogControler()
 
-from apis.langgpt.submod import ask_langchain_model_gpt
+from apis.langgpt.submod import ask_langchain_model_gpt, test_chatbot_faiss
 
 async def ai_langchain_gpt_ask(data):
     result = None
@@ -25,3 +25,25 @@ async def ai_langchain_gpt_ask(data):
             raise
         else:
             raise HTTPException(status_code=500, detail='internal server error: {0}'.format(e))
+        
+async def ai_langchain_gpt_test():
+    result = None
+    try:
+        result = await test_chatbot_faiss()
+        if not result:
+            raise HTTPException(status_code=500, detail='Failed to run tests.')
+        
+        result = {
+            "msg": "success",
+            "data": {
+                "result": result
+            }
+        }
+        return result
+    except Exception as e:
+        log_controler.log_error(str(e), 'ai_langchain_gpt_test')
+        if isinstance(e, HTTPException):
+            raise
+        else:
+            raise HTTPException(status_code=500, detail='internal server error: {0}'.format(e))
+        

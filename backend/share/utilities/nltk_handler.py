@@ -46,7 +46,7 @@ class NLTKHandler:
         except LookupError:
             self.log_controler.log_info("NLTK 'punkt' tokenizer not found. Downloading...")
             try:
-                nltk.download('punkt', download_dir=self.data_dir)
+                nltk.download('punkt_tab', download_dir=self.data_dir)
                 self.log_controler.log_info("NLTK 'punkt' tokenizer downloaded successfully.")
             except Exception as e:
                 self.log_controler.log_error(f"Failed to download NLTK 'punkt' tokenizer: {e}", "NLTKHandler")
